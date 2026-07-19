@@ -1,0 +1,93 @@
+import cv2
+import time
+import os
+from datetime import datetime
+
+class SmartCameraSystem:
+    def __init__(self, camera_index=0, output_dir="captured_images"):
+        self.camera_index = camera_index
+        self.output_dir = output_dir
+        self.is_running = False
+        
+        if not os.path.exists(self.output_dir):
+            os.makedirs(self.output_dir)
+            print(f"[INFO] Created directory: {self.output_dir}")
+
+    def start_capture_loop(self, interval_seconds=5):
+        cap = cv2.VideoCapture(self.camera_index)
+        
+        if not cap.isOpened():
+            print("[ERROR] Could not open camera. Please check connection or index.")
+            return
+
+        print(f"[SUCCESS] Camera initialized. Capturing every {interval_seconds} seconds.")
+        print("[INFO] Press 'q' on the camera window to exit.")
+        
+        self.is_running = True
+        last_capture_time = time.time() - interval_seconds
+        show_rec_indicator = 0
+
+        try:
+            while self.is_running:
+                ret, frame = cap.read()
+                if not ret:
+                    print("[ERROR] Failed to grab frame from camera.")
+                    break
+
+                current_time = time.time()
+
+                if current_time - last_capture_time >= interval_seconds:
+                    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                    filename = f"IR_Triggered_{timestamp}.jpg"
+                    filepath = os.path.join(self.output_dir, filename)
+                    
+                    cv2.imwrite(filepath, frame)
+                    print(f"[CAPTURE] Image saved: {filepath}")
+                    
+                    last_capture_time = current_time
+                    show_rec_indicator = 15
+
+                # ---- UI Drawing ----
+                h, w, _ = frame.shape
+                now_str = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+                # 1. Top & Bottom Bars
+                overlay = frame.copy()
+                cv2.rectangle(overlay, (0, 0), (w, 50), (0, 0, 0), -1)
+                cv2.rectangle(overlay, (0, h - 40), (w, h), (0, 0, 0), -1)
+                cv2.addWeighted(overlay, 0.5, frame, 0.5, 0, frame)
+
+                # 2. Top Text
+                cv2.putText(frame, f"SYSTEM: ACTIVE | INTERVAL: {interval_seconds}s", 
+                            (20, 32), cv2.FONT_HERSHEY_DUPLEX, 0.6, (0, 255, 0), 1, cv2.LINE_AA)
+                cv2.putText(frame, now_str, 
+                            (w - 220, 32), cv2.FONT_HERSHEY_DUPLEX, 0.6, (255, 255, 255), 1, cv2.LINE_AA)
+
+                # 3. Bottom Text
+                cv2.putText(frame, "Press 'Q' to Safely Exit Program", 
+                            (20, h - 15), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (200, 200, 200), 1, cv2.LINE_AA)
+
+                # 4. REC Indicator
+                if show_rec_indicator > 0:
+                    cv2.circle(frame, (w - 90, h - 20), 7, (0, 0, 255), -1)
+                    cv2.putText(frame, "REC", (w - 75, h - 15), 
+                                cv2.FONT_HERSHEY_DUPLEX, 0.5, (0, 0, 255), 1, cv2.LINE_AA)
+                    show_rec_indicator -= 1
+
+                cv2.imshow("Smart IR-Camera System UI", frame)
+
+                if cv2.waitKey(1) & 0xFF == ord('q'):
+                    print("[INFO] Shutting down system by user request.")
+                    break
+
+        except KeyboardInterrupt:
+            print("\n[INFO] System interrupted by keyboard.")
+        
+        finally:
+            cap.release()
+            cv2.destroyAllWindows()
+            print("[STATUS] Camera released. System closed clean.")
+
+if __name__ == "__main__":
+    cam_system = SmartCameraSystem(camera_index=0, output_dir="IR_Sensor_Captures")
+    cam_system.start_capture_loop(interval_seconds=5)
